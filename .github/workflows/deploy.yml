@@ -1,0 +1,80 @@
+name: Deploy NovaBank
+run-name: Deploy ${{ inputs.environment }}${{ inputs.preview_only && ' (preview only)' || '' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target GitHub environment
+        type: choice
+        required: true
+        options:
+          - dev
+          - prod
+      preview_only:
+        description: Validate and show what-if without creating resources
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: novabank-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      DATABASE_ADMIN_OBJECT_ID: ${{ vars.DATABASE_ADMIN_OBJECT_ID }}
+      DATABASE_ADMIN_NAME: ${{ vars.DATABASE_ADMIN_NAME }}
+      API_CLIENT_ID: ${{ vars.API_CLIENT_ID }}
+      API_AUDIENCE: ${{ vars.API_AUDIENCE }}
+      LOG_READER_GROUP_ID: ${{ vars.LOG_READER_GROUP_ID }}
+      ALERT_ACTION_GROUP_ID: ${{ vars.ALERT_ACTION_GROUP_ID }}
+      TARGET_ENVIRONMENT: ${{ inputs.environment }}
+      PREVIEW_ONLY: ${{ inputs.preview_only }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Ensure deployment prerequisites
+        run: |
+          if ! az bicep version; then
+            az bicep install --version v0.48.1
+          fi
+          if ! command -v psql; then
+            sudo apt-get update
+            sudo apt-get install --yes postgresql-client
+          fi
+      - name: Sign in using Azure OIDC
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Preview or deploy infrastructure and API
+        run: |
+          if [[ "$PREVIEW_ONLY" == "true" ]]; then
+            python3 iac/scripts/deploy.py "$TARGET_ENVIRONMENT" --preview
+          else
+            python3 iac/scripts/deploy.py "$TARGET_ENVIRONMENT"
+          fi
+      - name: Remove any remaining temporary runner access
+        if: always()
+        run: python3 iac/scripts/deploy.py "$TARGET_ENVIRONMENT" --cleanup

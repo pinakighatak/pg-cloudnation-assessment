@@ -1,0 +1,51 @@
+name: Validate proof of concept
+
+on:
+  pull_request:
+    paths:
+      - 'iac/**'
+      - 'src/**'
+      - 'tests/**'
+      - '.github/workflows/**'
+      - 'global.json'
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_ADMIN_OBJECT_ID: '11111111-1111-1111-1111-111111111111'
+      DATABASE_ADMIN_NAME: 'validation-only'
+      API_CLIENT_ID: '22222222-2222-2222-2222-222222222222'
+      API_AUDIENCE: 'api://22222222-2222-2222-2222-222222222222'
+      AZURE_CLIENT_ID: '33333333-3333-3333-3333-333333333333'
+      LOG_READER_GROUP_ID: '44444444-4444-4444-4444-444444444444'
+      ALERT_ACTION_GROUP_ID: '/subscriptions/55555555-5555-5555-5555-555555555555/resourceGroups/validation/providers/Microsoft.Insights/actionGroups/validation'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Ensure Bicep compiler is available
+        run: |
+          if ! az bicep version; then
+            az bicep install --version v0.48.1
+          fi
+      - name: Compile, test and check infrastructure contracts
+        run: bash iac/scripts/validate.sh
+      - name: Check shell syntax
+        run: bash -n iac/scripts/validate.sh
+      - name: Validate workflow syntax
+        run: |
+          PATH="$(go env GOPATH)/bin:$PATH"
+          export PATH
+          if ! command -v actionlint; then
+            go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          fi
+          actionlint -color
