@@ -1,0 +1,11 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
+    "Database__Host": "<server>.postgres.database.azure.com",
+    "Database__Name": "novabank",
+    "Database__Username": "<authorized-entra-principal-name>"
+  }
+}
