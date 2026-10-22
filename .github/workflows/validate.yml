@@ -43,7 +43,8 @@ jobs:
         run: bash -n iac/scripts/validate.sh
       - name: Validate workflow syntax
         run: |
-          export PATH="$(go env GOPATH)/bin:$PATH"
+          PATH="$(go env GOPATH)/bin:$PATH"
+          export PATH
           if ! command -v actionlint; then
             go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           fi
